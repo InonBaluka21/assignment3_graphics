@@ -27,7 +27,7 @@ inline glm::vec4 StickerToVec4(StickerColor c)
 struct Cubie
 {
     int id = -1;
-
+    glm::ivec3 currentGridPos;
     // Stickers by face direction; internal faces are StickerColor::None.
     std::array<StickerColor, 6> stickers = {
         StickerColor::None, StickerColor::None,

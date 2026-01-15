@@ -1,109 +1,115 @@
-#include <Camera.h>
+#include "Camera.h"
 
-void Camera::SetOrthographic(float near, float far)
+// Correct GLFW callback signatures: key uses (window, key, scancode, action, mods),
+// mouse button uses (window, button, action, mods),
+// cursor pos uses (window, xpos, ypos),
+// scroll uses (window, xoffset, yoffset). [web:16][web:27]
+static void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods)
 {
-    m_Near = near;
-    m_Far = far;
-
-    // Rest Projection and View matrices
-    m_Projection = glm::ortho(m_Left, m_Right, m_Bottom, m_Top, near, far);
-    m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up);
-}
-
-/////////////////////
-// Input Callbacks //
-/////////////////////
-
-void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods)
-{
-    Camera* camera = (Camera*) glfwGetWindowUserPointer(window);
-    if (!camera) {
-        std::cout << "Warning: Camera wasn't set as the Window User Pointer! KeyCallback is skipped" << std::endl;
-        return;
-    }
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (!camera) return;
 
     if (action == GLFW_PRESS || action == GLFW_REPEAT)
     {
         switch (key)
         {
-            case GLFW_KEY_UP:
-                std::cout << "UP Pressed" << std::endl;
-                break;
-            case GLFW_KEY_DOWN:
-                std::cout << "DOWN Pressed" << std::endl;
-                break;
-            case GLFW_KEY_LEFT:
-                std::cout << "LEFT Pressed" << std::endl;
-                break;
-            case GLFW_KEY_RIGHT:
-                std::cout << "RIGHT Pressed" << std::endl;
-                break;
-            default:
-                break;
+            case GLFW_KEY_UP:    std::cout << "UP Pressed\n"; break;
+            case GLFW_KEY_DOWN:  std::cout << "DOWN Pressed\n"; break;
+            case GLFW_KEY_LEFT:  std::cout << "LEFT Pressed\n"; break;
+            case GLFW_KEY_RIGHT: std::cout << "RIGHT Pressed\n"; break;
+            default: break;
         }
     }
 }
 
-void MouseButtonCallback(GLFWwindow* window, double currMouseX, double currMouseY)
+static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
-    {
-        std::cout << "MOUSE LEFT Click" << std::endl;
-    }
-    else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-    {
-        std::cout << "MOUSE RIGHT Click" << std::endl;
-    }
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (!camera) return;
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+        std::cout << "MOUSE LEFT Click\n";
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+        std::cout << "MOUSE RIGHT Click\n";
 }
 
-void CursorPosCallback(GLFWwindow* window, double currMouseX, double currMouseY)
+static void CursorPosCallback(GLFWwindow* window, double currMouseX, double currMouseY)
 {
-    Camera* camera = (Camera*) glfwGetWindowUserPointer(window);
-    if (!camera) {
-        std::cout << "Warning: Camera wasn't set as the Window User Pointer! KeyCallback is skipped" << std::endl;
-        return;
-    }
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (!camera) return;
 
-    camera->m_NewMouseX = camera->m_OldMouseX - currMouseX;
-    camera->m_NewMouseY = camera->m_OldMouseY - currMouseY;
+    // חישוב הדלתא (כמה העכבר זז מהפריים הקודם)
+    double deltaX = currMouseX - camera->m_OldMouseX;
+    double deltaY = camera->m_OldMouseY - currMouseY; // הפוך ב-Y כי בצגים למעלה זה 0
+
     camera->m_OldMouseX = currMouseX;
     camera->m_OldMouseY = currMouseY;
 
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+    // בדיקה: האם כפתור ימני לחוץ? רק אז נזיז את המצלמה
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
     {
-        std::cout << "MOUSE LEFT Motion" << std::endl;
-    }
-    else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-    {
-        std::cout << "MOUSE RIGHT Motion" << std::endl;
+        float sensitivity = 0.3f; // רגישות העכבר
+        camera->m_Yaw   += deltaX * sensitivity;
+        camera->m_Pitch += deltaY * sensitivity;
+
+        // הגבלה כדי שהמצלמה לא תתהפך (Gimbal Lock)
+        if (camera->m_Pitch > 89.0f) camera->m_Pitch = 89.0f;
+        if (camera->m_Pitch < -89.0f) camera->m_Pitch = -89.0f;
+
+        // עדכון המיקום
+        camera->RecalculatePosition();
     }
 }
 
-void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffsetY)
+static void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffsetY)
 {
-    Camera* camera = (Camera*) glfwGetWindowUserPointer(window);
-    if (!camera) {
-        std::cout << "Warning: Camera wasn't set as the Window User Pointer! ScrollCallback is skipped" << std::endl;
-        return;
-    }
+    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (!camera) return;
 
-    std::cout << "SCROLL Motion" << std::endl;
+    std::cout << "SCROLL Motion\n";
+}
+
+void Camera::UpdateView()
+{
+    m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up);
+}
+
+void Camera::SetPerspective(float fovDegrees, float nearPlane, float farPlane)
+{
+    m_Near = nearPlane;
+    m_Far  = farPlane;
+
+    float aspect = (float)m_Width / (float)m_Height;
+    m_Projection = glm::perspective(glm::radians(fovDegrees), aspect, m_Near, m_Far);
+    UpdateView();
 }
 
 void Camera::EnableInputs(GLFWwindow* window)
 {
-    // Set camera as the user pointer for the window
     glfwSetWindowUserPointer(window, this);
 
-    // Handle key inputs
-    glfwSetKeyCallback(window, (void(*)(GLFWwindow *, int, int, int, int)) KeyCallback);
+    // Register callbacks without any casts (signatures already match). [web:16][web:27]
+    glfwSetKeyCallback(window, KeyCallback);
+    glfwSetMouseButtonCallback(window, MouseButtonCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
+}
 
-    // Handle cursor buttons
-    glfwSetMouseButtonCallback(window, (void(*)(GLFWwindow *, int, int, int)) MouseButtonCallback);
+void Camera::LookAt(const glm::vec3& target)
+{
+    m_Orientation = glm::normalize(target - m_Position);
+    UpdateView();
+}
 
-    // Handle cursor position and inputs on motion
-    glfwSetCursorPosCallback(window , (void(*)(GLFWwindow *, double, double)) CursorPosCallback);
+void Camera::RecalculatePosition()
+{
+    // המרת קואורדינטות כדוריות (זוויות) לקואורדינטות קרטזיות (XYZ)
+    float x = m_Radius * cos(glm::radians(m_Pitch)) * cos(glm::radians(m_Yaw));
+    float y = m_Radius * sin(glm::radians(m_Pitch));
+    float z = m_Radius * cos(glm::radians(m_Pitch)) * sin(glm::radians(m_Yaw));
 
-    // Handle scroll inputs
-    glfwSetScrollCallback(window, (void(*)(GLFWwindow *, double, double)) ScrollCallback);
+    m_Position = glm::vec3(x, y, z);
+    
+    // חשוב: תמיד להסתכל למרכז (0,0,0)
+    LookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 }

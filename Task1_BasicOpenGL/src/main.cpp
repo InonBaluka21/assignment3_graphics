@@ -5,12 +5,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Debugger.h"
-#include "Shader.h"
-#include "Texture.h"
 #include "Camera.h"
-
-#include "Cubie.h"
-#include "CubeMesh.h"
+#include "RubiksCube.h" 
 
 #include <iostream>
 
@@ -18,9 +14,95 @@ const unsigned int width = 800;
 const unsigned int height = 800;
 const float nearPlane = 0.1f;
 const float farPlane  = 100.0f;
-static glm::vec4 DarkPlastic()
+
+struct TurnState {
+    bool active = false;
+    glm::vec3 axis = glm::vec3(0,1,0);
+    float targetDeg = 90.0f;   
+    float currentDeg = 0.0f;   
+    float speedDegPerSec = 180.0f;
+};
+
+struct AppState {
+    TurnState turn;
+    int dir = +1;             
+    float stepDeg = 90.0f;    
+    Camera* camera = nullptr; // חיבור למצלמה
+};
+
+static glm::vec3 KeyToAxis(int key)
 {
-    return glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
+    switch (key)
+    {
+        case GLFW_KEY_R: return glm::vec3( 1,0,0);
+        case GLFW_KEY_L: return glm::vec3(-1,0,0);
+        case GLFW_KEY_U: return glm::vec3( 0,1,0);
+        case GLFW_KEY_D: return glm::vec3( 0,-1,0);
+        case GLFW_KEY_F: return glm::vec3( 0,0,1);
+        case GLFW_KEY_B: return glm::vec3( 0,0,-1);
+        default:         return glm::vec3(0,0,0);
+    }
+}
+
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (action != GLFW_PRESS) return;
+
+    AppState* s = (AppState*)glfwGetWindowUserPointer(window);
+    if (!s) return;
+
+    if (key == GLFW_KEY_SPACE) { s->dir *= -1; return; }
+    if (key == GLFW_KEY_Z)     { s->stepDeg = std::max(90.0f, s->stepDeg / 2.0f); return; }
+    if (key == GLFW_KEY_A)     { s->stepDeg = std::min(180.0f, s->stepDeg * 2.0f); return; }
+
+    if (s->turn.active) return;
+
+    glm::vec3 axis = KeyToAxis(key);
+    if (axis == glm::vec3(0,0,0)) return;
+
+    s->turn.active = true;
+    s->turn.axis = glm::normalize(axis);
+    s->turn.targetDeg = (float)s->dir * s->stepDeg;
+    s->turn.currentDeg = 0.0f;
+}
+
+static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
+{
+    // 1. בדיקה שהחיבור ל-State עובד
+    AppState* s = (AppState*)glfwGetWindowUserPointer(window);
+    if (!s) {
+        std::cout << "ERROR: State is NULL!" << std::endl;
+        return;
+    }
+    if (!s->camera) {
+        std::cout << "ERROR: Camera is NULL!" << std::endl;
+        return;
+    }
+
+    Camera* cam = s->camera;
+
+    // חישוב דלתא
+    double deltaX = xpos - cam->m_OldMouseX;
+    double deltaY = cam->m_OldMouseY - ypos; 
+
+    // עדכון מיידי
+    cam->m_OldMouseX = xpos;
+    cam->m_OldMouseY = ypos;
+    
+    // רגישות גבוהה לבדיקה
+    float sensitivity = 0.5f; 
+    cam->m_Yaw   += deltaX * sensitivity;
+    cam->m_Pitch += -deltaY * sensitivity;
+
+    if (cam->m_Yaw > 360.0f) cam->m_Yaw -= 360.0f;
+    if (cam->m_Yaw < 0.0f)   cam->m_Yaw += 360.0f;
+    // ------------------------
+
+    // הגבלת Pitch (כבר קיים אצלך)
+    if (cam->m_Pitch > 89.0f) cam->m_Pitch = 89.0f;
+    if (cam->m_Pitch < -89.0f) cam->m_Pitch = -89.0f;
+    
+    cam->RecalculatePosition();
 }
 
 int main()
@@ -31,103 +113,82 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(width, height, "Static Cubie (CubeMesh)", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(width, height, "Rubiks Cube (Full)", NULL, NULL);
     if (!window) { glfwTerminate(); return -1; }
 
     glfwMakeContextCurrent(window);
-
-    // Use the same style your engine already uses (it works in your project)
     gladLoadGL();
-
     glfwSwapInterval(1);
-    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
 
     GLCall(glEnable(GL_DEPTH_TEST));
     GLCall(glEnable(GL_BLEND));
     GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
-    // GPU resources (created once)
-    CubeMesh cubeMesh;
-    Texture texture("res/textures/white.png");
-    Shader shader("res/shaders/basic.shader");
+    AppState state;
+    glfwSetWindowUserPointer(window, &state);
+    
+    // רישום Callbacks
+    glfwSetKeyCallback(window, KeyCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback); // חשוב!
 
-    // Camera (only for View matrix right now)
+    RubiksCube rubiksCube;
+
+    // אתחול מצלמה
     Camera camera(width, height);
-    camera.SetOrthographic(nearPlane, farPlane);
-    camera.EnableInputs(window);
+    state.camera = &camera; // חיבור המצלמה ל-state
+    
+    // אתחול המיקום ההתחלתי:
+    // שינוי: הסרנו את SetPosition הידני שהיה כאן ודרס את החישוב
+    glfwGetCursorPos(window, &camera.m_OldMouseX, &camera.m_OldMouseY);
+    camera.SetPerspective(70.0f, nearPlane, farPlane);
+    camera.RecalculatePosition(); // מציב את המצלמה בנקודת ההתחלה לפי רדיוס וזווית
 
-    // Perspective projection (3D)
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f),
-                                      (float)width / (float)height,
-                                      nearPlane, farPlane);
-
-    // One cubie (logic object)
-    Cubie cubie;
-    cubie.id = 0;
-
-    // Corner example: +X +Y +Z are colored, rest are internal/none.
-    cubie.stickers[(int)Face::PosX] = StickerColor::Red;
-    cubie.stickers[(int)Face::PosY] = StickerColor::White;
-    cubie.stickers[(int)Face::PosZ] = StickerColor::Blue;
-
-    cubie.localRotation = glm::mat4(1.0f);
-
-
-    glm::vec3 slotWorldPos(0.0f, 0.0f, -3.0f);
+    glm::mat4 globalRotation = glm::mat4(1.0f);
 
     while (!glfwWindowShouldClose(window))
     {
-        GLCall(glClearColor(0,0,0,1));
+        GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1)); 
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
+        // שליפת המטריצות המעודכנות מהמצלמה
         glm::mat4 view = camera.GetViewMatrix();
+        glm::mat4 proj = camera.GetProjectionMatrix();
+        glm::mat4 vp = proj * view;
 
-        // Continuous rotation (demo)
-        float t = (float)glfwGetTime();
-        glm::mat4 pitch = glm::rotate(glm::mat4(1.0f), glm::radians(-25.0f), glm::vec3(1, 0, 0));
+        // לוגיקת אנימציה
+        static double lastT = glfwGetTime();
+        double nowT = glfwGetTime();
+        float dt = (float)(nowT - lastT);
+        lastT = nowT;
 
-        // Continuous yaw (spin)
-        glm::mat4 yaw   = glm::rotate(glm::mat4(1.0f), t, glm::vec3(0, 1, 0));
-        glm::mat4 wallAnimRotation = yaw * pitch;// * glm::rotate(glm::mat4(1.0f), 0.5f * t, glm::vec3(1, 0, 0));
-
-        glm::mat4 model = cubie.BuildModel(slotWorldPos, wallAnimRotation, 1.0f);
-        glm::mat4 mvp = proj * view * model;
-
-        shader.Bind();
-        texture.Bind(0);
-        shader.SetUniform1i("u_Texture", 0);
-        shader.SetUniformMat4f("u_MVP", mvp);
-
-        // Bind mesh once, draw 6 faces with different colors.
-        cubeMesh.Bind();
-
-        // Draw-group -> Face enum mapping (based on cubeIndices order)
-        // group 0: +Z, group 1: -Z, group 2: +X, group 3: -X, group 4: +Y, group 5: -Y
-        Face groupToFace[6] = {
-            Face::PosZ, Face::NegZ,
-            Face::PosX, Face::NegX,
-            Face::PosY, Face::NegY
-        };
-
-        for (int group = 0; group < 6; ++group)
+        if (state.turn.active)
         {
-            Face f = groupToFace[group];
-            StickerColor sc = cubie.stickers[(int)f];
-
-            glm::vec4 faceColor = (sc == StickerColor::None) ? DarkPlastic()
-                                                            : StickerToVec4(sc);
-
-            shader.SetUniform4f("u_Color", faceColor);
-
-            // each face is 6 indices; offset is group*6*sizeof(uint)
-            const void* offset = (const void*)(group * 6 * sizeof(unsigned int));
-            GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, offset));
+            float goal = std::abs(state.turn.targetDeg);
+            state.turn.currentDeg += state.turn.speedDegPerSec * dt;
+            
+            if (state.turn.currentDeg >= goal)
+            {
+                state.turn.currentDeg = goal;
+                state.turn.active = false;
+                rubiksCube.FinishTurn(state.turn.axis, state.turn.targetDeg);
+            }
         }
+        
+        bool isAnimating = state.turn.active;
+        glm::vec3 animAxis = state.turn.axis;
+        float animDeg = 0.0f;
+
+        if (isAnimating) {
+            float signedDeg = (state.turn.targetDeg < 0.0f) ? -state.turn.currentDeg : state.turn.currentDeg;
+            animDeg = signedDeg;
+        }
+
+        glm::mat4 finalGlobalModel = globalRotation;
+        rubiksCube.Draw(vp, finalGlobalModel, isAnimating, animAxis, animDeg);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
 
     glfwTerminate();
     return 0;

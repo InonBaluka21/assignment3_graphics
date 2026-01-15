@@ -1,57 +1,51 @@
 #pragma once
 
-#define GLM_ENABLE_EXPERIMENTAL
-
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/rotate_vector.hpp>
-#include <glm/gtx/vector_angle.hpp>
 
-#include <Debugger.h>
-#include <Shader.h>
+#include <iostream>
 
 class Camera
 {
-    private:
-        // View and Projection
-        glm::mat4 m_View = glm::mat4(1.0f);
-        glm::mat4 m_Projection = glm::mat4(1.0f);
+private:
+    glm::mat4 m_View       = glm::mat4(1.0f);
+    glm::mat4 m_Projection = glm::mat4(1.0f);
 
-        // View matrix paramters
-        glm::vec3 m_Position = glm::vec3(0.0f, 0.0f, 0.0f);
-        glm::vec3 m_Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
-        glm::vec3 m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 m_Position    = glm::vec3(0.0f, 0.0f, 10.0f);
+    glm::vec3 m_Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 m_Up          = glm::vec3(0.0f, 1.0f, 0.0f);
 
-        // Projection matrix parameters
-        float m_Near = 0.1f; 
-        float m_Far = 100.0f;
-        int m_Width;
-        int m_Height;
+    float m_Near = 0.1f;
+    float m_Far  = 100.0f;
 
-        // Orthographic Projection parameters
-        float m_Left = -1.0f;
-        float m_Right = 1.0f;
-        float m_Bottom = -1.0f; 
-        float m_Top = 1.0f;
-    public:
-        // Prevent the camera from jumping around when first clicking left click
-        double m_OldMouseX = 0.0;
-        double m_OldMouseY = 0.0;
-        double m_NewMouseX = 0.0;
-        double m_NewMouseY = 0.0;
-    public:
-        Camera(int width, int height)
-            : m_Width(width), m_Height(height) {};
+    int m_Width  = 0;
+    int m_Height = 0;
+    
+public:
+    float m_Yaw = -90.0f;   // זווית אופקית (מתחילים ממול)
+    float m_Pitch = 0.0f;   // זווית אנכית
+    float m_Radius = 15.0f; // מרחק מהמרכז
 
-        // Update Projection matrix for Orthographic mode
-        void SetOrthographic(float near, float far);
-
-        // Handle camera inputs
-        void EnableInputs(GLFWwindow* window);
-
-        inline glm::mat4 GetViewMatrix() const { return m_View; }
-        inline glm::mat4 GetProjectionMatrix() const { return m_Projection; }
+    double m_OldMouseX = 0.0, m_OldMouseY = 0.0;
+    double m_NewMouseX = 0.0, m_NewMouseY = 0.0;
+    
+    Camera(int width, int height) : m_Width(width), m_Height(height) {}
+    
+    void SetPerspective(float fovDegrees, float nearPlane, float farPlane);
+    void UpdateView();
+    void EnableInputs(GLFWwindow* window);
+    void LookAt(const glm::vec3& target);
+    
+    glm::mat4 GetViewMatrix() const { return m_View; }
+    glm::mat4 GetProjectionMatrix() const { return m_Projection; }
+    
+    glm::vec3 GetPosition() const { return m_Position; }
+    void SetPosition(const glm::vec3& p) { 
+        m_Position = p;
+        UpdateView(); 
+    }
+    void RecalculatePosition();
 };

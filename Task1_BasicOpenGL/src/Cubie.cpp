@@ -24,8 +24,15 @@ glm::mat4 Cubie::BuildModel(const glm::vec3& slotWorldPos, const glm::mat4& wall
 {
     glm::mat4 trans = glm::translate(glm::mat4(1.0f), slotWorldPos);
     glm::mat4 scl   = glm::scale(glm::mat4(1.0f), glm::vec3(uniformScale));
-    // Typical order: translate -> (wall rotation) -> (cubie local rotation) -> scale
-    return trans * wallAnimRotation * localRotation * scl;
+    
+    // --- התיקון כאן ---
+    // הסדר החדש:
+    // 1. קודם Scale (בסיס)
+    // 2. ואז LocalRotation (כיוון הקובייה עצמה)
+    // 3. ואז Translate (מזיזים למקום ברשת - Grid)
+    // 4. ורק בסוף wallAnimRotation (מסובבים את הכל סביב הראשית 0,0,0)
+    
+    return wallAnimRotation * trans * localRotation * scl;
 }
 
 void Cubie::ApplyLocalRotation(const glm::mat4& rot)

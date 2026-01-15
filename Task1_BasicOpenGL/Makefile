@@ -67,6 +67,12 @@ copy_lib_l:
 copy_res_l:
 	@echo "Copying resources for Linux..."
 	mkdir -p ${workspaceFolder}/bin/res && cp -rf ${workspaceFolder}/src/res/* ${workspaceFolder}/bin/res
+clean:
+ifeq ($(OS),Windows_NT)
+	cmd /c del /Q /S ${workspaceFolder}\bin\*.o ${workspaceFolder}\bin\main.exe
+else
+	rm -rf ${workspaceFolder}/bin/*.o ${workspaceFolder}/bin/main
+endif
 
 # Parallel build (add -jN option to run with N jobs)
-.PHONY: all copy_res_m copy_res_w
+.PHONY: all copy_res_m copy_res_w clean
