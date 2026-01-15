@@ -39,6 +39,7 @@ struct Cubie
     glm::ivec3 currentGridPos;
     glm::mat4 localRotation;
     StickerColor stickers[6];
+    glm::vec3 translationOffset = glm::vec3(0.0f);
 
     Cubie() : id(0), currentGridPos(0), localRotation(1.0f) {}
 

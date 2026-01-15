@@ -27,7 +27,7 @@ public:
     
     // NEW: Function to manipulate a single picked cube
     void UpdateCubieDesync(int id, const glm::mat4& deltaTransform);
-
+    void SetCubiePosition(int id, const glm::vec3& newPos);
     int GetSize() const { return m_Size; }
 
 private:

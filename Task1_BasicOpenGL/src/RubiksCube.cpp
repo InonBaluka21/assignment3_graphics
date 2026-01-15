@@ -230,3 +230,18 @@ void RubiksCube::FinishTurn(glm::vec3 axis, float deg, int layerIndex)
         }
     }
 }
+
+
+void RubiksCube::SetCubiePosition(int id, const glm::vec3& newPos)
+{
+    for (auto& cubie : m_Cubies)
+    {
+        if (cubie.id == id)
+        {
+            glm::vec3 originalPos = GetInitialPosition(cubie.currentGridPos.x, cubie.currentGridPos.y, cubie.currentGridPos.z);
+            
+            cubie.translationOffset = newPos - originalPos;
+            break;
+        }
+    }
+}

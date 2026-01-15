@@ -16,7 +16,8 @@ glm::mat4 Cubie::BuildModel(const glm::vec3& slotWorldPos, const glm::mat4& wall
 {
     glm::mat4 scl = glm::scale(glm::mat4(1.0f), glm::vec3(uniformScale));
 
-    glm::mat4 trans = glm::translate(glm::mat4(1.0f), slotWorldPos);
+    //glm::mat4 trans = glm::translate(glm::mat4(1.0f), slotWorldPos);
+    glm::mat4 trans = glm::translate(glm::mat4(1.0f), slotWorldPos + translationOffset);
 
     return wallAnimRotation * trans * localRotation * scl;
 }

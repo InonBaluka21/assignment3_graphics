@@ -59,6 +59,19 @@ void MouseCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+glm::vec3 GetWorldPos(double mouseX, double mouseY, float depth, Camera* cam) 
+{
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // OpenGL Y is inverted (0 at bottom), Mouse Y is 0 at top
+    glm::vec3 winCoord = glm::vec3(mouseX, viewport[3] - mouseY, depth);
+    
+    glm::mat4 view = cam->GetViewMatrix();
+    glm::mat4 projection = cam->GetProjectionMatrix();
+
+    return glm::unProject(winCoord, view, projection, glm::vec4(viewport[0], viewport[1], viewport[2], viewport[3]));
+}
 
 int main()
 {
@@ -89,7 +102,7 @@ int main()
         Camera camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0f, 0.0f, 15.0f));
         
         // Change cube size here (Bonus)
-        int cubeSize = 5; 
+        int cubeSize = 3; 
         RubiksCube rubiksCube(cubeSize);
         
         state.camera = &camera;
@@ -194,31 +207,35 @@ void MouseCallback(GLFWwindow* window, double xpos, double ypos)
     s->lastX = xpos;
     s->lastY = ypos;
 
-    // Right Click: Pan
     if (s->rightMousePressed)
     {
-        s->camera->Pan(-xoffset, -yoffset);
+        if (s->isPickingMode && s->pickedCubieId != -1)
+        {
+            glm::vec3 globalMousePos = GetWorldPos(xpos, ypos, s->pickedDepth, s->camera);
+
+            glm::mat4 inverseModel = glm::inverse(s->globalCubeRotation);
+            
+            glm::vec4 localMousePos4 = inverseModel * glm::vec4(globalMousePos, 1.0f);
+            glm::vec3 localMousePos = glm::vec3(localMousePos4);
+
+            s->cube->SetCubiePosition(s->pickedCubieId, localMousePos);
+        }
+        else 
+        {
+            s->camera->Pan(-xoffset, -yoffset);
+        }
     }
 
-    // Left Click logic
     if (s->leftMousePressed)
     {
-        // CASE A: Picking Mode + Cube Selected -> Rotate ONLY that cube
         if (s->isPickingMode && s->pickedCubieId != -1)
         {
             float sensitivity = 0.05f; 
-            
-            // Create rotation based on mouse movement
             glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), xoffset * sensitivity, glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), -yoffset * sensitivity, glm::vec3(1.0f, 0.0f, 0.0f));
-            
-            // Combine them
             glm::mat4 deltaRot = rotX * rotY;
-            
-            // Apply to specific cube
             s->cube->UpdateCubieDesync(s->pickedCubieId, deltaRot);
         }
-        // CASE B: Normal Mode -> Rotate Whole Cube
         else if (!s->isPickingMode)
         {
             float sensitivity = 0.005f;
