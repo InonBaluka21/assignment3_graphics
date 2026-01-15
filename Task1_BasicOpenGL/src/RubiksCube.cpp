@@ -1,14 +1,16 @@
 #include "RubiksCube.h"
 #include <iostream>
+#include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 
-// Distance between cubies to make them look separate
+// Distance between cubies
 static const float SPACING = 2.1f; 
 
-RubiksCube::RubiksCube()
-    : m_Mesh(nullptr), m_Shader(nullptr), m_Texture(nullptr)
+RubiksCube::RubiksCube(int size)
+    : m_Size(size), m_Mesh(nullptr), m_Shader(nullptr), m_Texture(nullptr)
 {
-    // Initialize graphics resources
-    // Note: In a real engine, these might be passed in or managed by a Resource Manager
+    if (m_Size < 1) m_Size = 1;
+
     m_Mesh = new CubeMesh();
     m_Shader = new Shader("res/shaders/basic.shader");
     m_Texture = new Texture("res/textures/white.png");
@@ -28,20 +30,17 @@ void RubiksCube::Init()
     m_Cubies.clear();
     int idCounter = 0;
 
-    // Loop from -1 to 1 on all axes to build the 3x3x3 grid
-    for (int x = -1; x <= 1; x++)
+    for (int x = 0; x < m_Size; x++)
     {
-        for (int y = -1; y <= 1; y++)
+        for (int y = 0; y < m_Size; y++)
         {
-            for (int z = -1; z <= 1; z++)
+            for (int z = 0; z < m_Size; z++)
             {
                 Cubie newCubie;
                 newCubie.id = idCounter++;
-                newCubie.currentGridPos = glm::ivec3(x, y, z);
-                // Set initial local transformation (identity)
+                newCubie.currentGridPos = glm::ivec3(x, y, z); 
                 newCubie.localRotation = glm::mat4(1.0f);
 
-                // Determine colors based on grid position
                 SetupStickers(newCubie, x, y, z);
 
                 m_Cubies.push_back(newCubie);
@@ -52,67 +51,75 @@ void RubiksCube::Init()
 
 void RubiksCube::SetupStickers(Cubie& cubie, int x, int y, int z)
 {
-    // Reset all to None first
     for (int i = 0; i < 6; i++) 
         cubie.stickers[i] = StickerColor::None;
 
-    // Assign colors only if the face is on the outer shell of the Rubik's cube
-    
-    // Right (+X)
-    if (x == 1)  cubie.stickers[(int)Face::PosX] = StickerColor::Red;
-    
-    // Left (-X)
-    if (x == -1) cubie.stickers[(int)Face::NegX] = StickerColor::Orange;
-    
-    // Top (+Y)
-    if (y == 1)  cubie.stickers[(int)Face::PosY] = StickerColor::White;
-    
-    // Bottom (-Y)
-    if (y == -1) cubie.stickers[(int)Face::NegY] = StickerColor::Yellow;
-    
-    // Front (+Z)
-    if (z == 1)  cubie.stickers[(int)Face::PosZ] = StickerColor::Blue;
-    
-    // Back (-Z)
-    if (z == -1) cubie.stickers[(int)Face::NegZ] = StickerColor::Green;
+    if (x == m_Size - 1)  cubie.stickers[(int)Face::PosX] = StickerColor::Red;
+    if (x == 0)           cubie.stickers[(int)Face::NegX] = StickerColor::Orange;
+    if (y == m_Size - 1)  cubie.stickers[(int)Face::PosY] = StickerColor::White;
+    if (y == 0)           cubie.stickers[(int)Face::NegY] = StickerColor::Yellow;
+    if (z == m_Size - 1)  cubie.stickers[(int)Face::PosZ] = StickerColor::Blue;
+    if (z == 0)           cubie.stickers[(int)Face::NegZ] = StickerColor::Green;
 }
 
 glm::vec3 RubiksCube::GetInitialPosition(int x, int y, int z) const
 {
-    return glm::vec3(x * SPACING, y * SPACING, z * SPACING);
+    float offset = (m_Size - 1) / 2.0f;
+    return glm::vec3((x - offset) * SPACING, (y - offset) * SPACING, (z - offset) * SPACING);
 }
 
-void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel)
+void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel, 
+                      bool isAnimating, glm::vec3 animAxis, float animDeg, 
+                      int layerIndex, int highlightedId)
 {
     m_Shader->Bind();
     m_Texture->Bind(0);
     m_Shader->SetUniform1i("u_Texture", 0);
     m_Mesh->Bind();
 
-    // שינוי: במקום לולאות מקוננות שמייצרות מיקומים, עוברים על הקוביות הקיימות
-    // ומשתמשים במיקום (GridPos) השמור בתוכן.
     for (const auto& cubie : m_Cubies)
     {
-        // 1. שליפת המיקום הלוגי מתוך הקובייה
         int x = cubie.currentGridPos.x;
         int y = cubie.currentGridPos.y;
         int z = cubie.currentGridPos.z;
 
-        // 2. חישוב המיקום הפיזי בעולם לפי הגריד (Spacing * Index)
         glm::vec3 currentPos = GetInitialPosition(x, y, z);
-
-        // --- מכאן והלאה הקוד זהה למקור ---
-
-        // כרגע אין אנימציה פרטנית, מטריצת יחידה
         glm::mat4 animRot = glm::mat4(1.0f);
 
-        // חישוב המודל הסופי של הקובייה הבודדת
+        if (isAnimating)
+        {
+            bool shouldRotate = false;
+
+            if (layerIndex == -1)
+            {
+                if      (animAxis.x > 0.5f && x == m_Size - 1) shouldRotate = true; 
+                else if (animAxis.x < -0.5f && x == 0)           shouldRotate = true; 
+                else if (animAxis.y > 0.5f && y == m_Size - 1) shouldRotate = true; 
+                else if (animAxis.y < -0.5f && y == 0)           shouldRotate = true; 
+                else if (animAxis.z > 0.5f && z == m_Size - 1) shouldRotate = true; 
+                else if (animAxis.z < -0.5f && z == 0)           shouldRotate = true; 
+            }
+            else
+            {
+                if      (std::abs(animAxis.x) > 0.9f && x == layerIndex) shouldRotate = true;
+                else if (std::abs(animAxis.y) > 0.9f && y == layerIndex) shouldRotate = true;
+                else if (std::abs(animAxis.z) > 0.9f && z == layerIndex) shouldRotate = true;
+            }
+
+            if (shouldRotate)
+            {
+                animRot = glm::rotate(glm::mat4(1.0f), glm::radians(animDeg), animAxis);
+            }
+        }
+
+        // --- Corrected: No Scaling, just draw the model ---
+        // If you want to highlight, you could change the u_Color slightly, 
+        // but the requirement is Translation/Rotation, so we leave scale at 1.0f.
         glm::mat4 model = globalModel * cubie.BuildModel(currentPos, animRot, 1.0f);
         glm::mat4 mvp = viewProj * model;
 
         m_Shader->SetUniformMat4f("u_MVP", mvp);
 
-        // ציור 6 הפאות
         Face groupToFace[6] = {
             Face::PosZ, Face::NegZ,
             Face::PosX, Face::NegX,
@@ -126,28 +133,22 @@ void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel)
 
             glm::vec4 colorVec;
             if (sc == StickerColor::None)
-                colorVec = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f); // פלסטיק שחור
+                colorVec = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f); 
             else
                 colorVec = StickerToVec4(sc);
 
             m_Shader->SetUniform4f("u_Color", colorVec);
 
-            // 6 אינדקסים לכל פאה
             const void* offset = (const void*)(group * 6 * sizeof(unsigned int));
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, offset);
         }
     }
 }
 
-// בתוך RubiksCube.cpp
-
-// עדכן את הפונקציה Draw:
-void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel, 
-                      bool isAnimating, glm::vec3 animAxis, float animDeg)
+void RubiksCube::DrawPicking(const glm::mat4& viewProj, const glm::mat4& globalModel)
 {
     m_Shader->Bind();
-    m_Texture->Bind(0);
-    m_Shader->SetUniform1i("u_Texture", 0);
+    m_Shader->SetUniform1i("u_PickingMode", 1); 
     m_Mesh->Bind();
 
     for (const auto& cubie : m_Cubies)
@@ -158,64 +159,73 @@ void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel,
 
         glm::vec3 currentPos = GetInitialPosition(x, y, z);
         
-        // --- השינוי מתחיל כאן ---
-        
-        glm::mat4 animRot = glm::mat4(1.0f);
-
-        if (isAnimating)
-        {
-            // בדיקה: האם הקובייה הזו שייכת לשכבה שמסתובבת?
-            // הסבר: אם הציר הוא (1,0,0) כלומר R, והקובייה ב-(1,1,0), אז 1*1 = 1 (חיובי) -> תסתובב.
-            // אם הקובייה ב-(-1,1,0), אז -1*1 = -1 (שלילי) -> לא תסתובב.
-            glm::vec3 fGridPos = glm::vec3(x, y, z);
-            
-            // משתמשים ב-dot product כדי לבדוק התאמה לציר
-            if (glm::dot(fGridPos, animAxis) > 0.1f) 
-            {
-                animRot = glm::rotate(glm::mat4(1.0f), glm::radians(animDeg), animAxis);
-            }
-        }
-        
-        // --- השינוי מסתיים כאן ---
-
-        glm::mat4 model = globalModel * cubie.BuildModel(currentPos, animRot, 1.0f);
+        // For picking, we assume no active animation keyframe
+        glm::mat4 model = globalModel * cubie.BuildModel(currentPos, glm::mat4(1.0f), 1.0f);
         glm::mat4 mvp = viewProj * model;
 
         m_Shader->SetUniformMat4f("u_MVP", mvp);
 
-        // ... המשך הקוד של ציור הפאות נשאר ללא שינוי ...
-        Face groupToFace[6] = { Face::PosZ, Face::NegZ, Face::PosX, Face::NegX, Face::PosY, Face::NegY };
-        for (int group = 0; group < 6; ++group) {
-             Face f = groupToFace[group];
-             StickerColor sc = cubie.stickers[(int)f];
-             glm::vec4 colorVec = (sc == StickerColor::None) ? glm::vec4(0.05f, 0.05f, 0.05f, 1.0f) : StickerToVec4(sc);
-             m_Shader->SetUniform4f("u_Color", colorVec);
-             const void* offset = (const void*)(group * 6 * sizeof(unsigned int));
-             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, offset);
+        // Encode ID
+        float r = (float)cubie.id / 255.0f;
+        glm::vec4 idColor = glm::vec4(r, 0.0f, 0.0f, 1.0f);
+        m_Shader->SetUniform4f("u_Color", idColor);
+
+        glDrawElements(GL_TRIANGLES, m_Mesh->GetIndexCount(), GL_UNSIGNED_INT, nullptr);
+    }
+    m_Shader->SetUniform1i("u_PickingMode", 0);
+}
+
+void RubiksCube::UpdateCubieDesync(int id, const glm::mat4& deltaTransform)
+{
+    // Apply a transformation to a specific cubie (for the bonus requirement)
+    for (auto& cubie : m_Cubies)
+    {
+        if (cubie.id == id)
+        {
+            // Apply the transformation on top of its existing local rotation
+            cubie.localRotation = deltaTransform * cubie.localRotation;
+            break;
         }
     }
 }
 
-void RubiksCube::FinishTurn(glm::vec3 axis, float deg)
+void RubiksCube::FinishTurn(glm::vec3 axis, float deg, int layerIndex)
 {
-    // יצירת מטריצת הסיבוב שהשתמשנו בה באנימציה
     glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis);
+    float center = (m_Size - 1) / 2.0f;
 
     for (auto& cubie : m_Cubies)
     {
-        // בודקים אם הקובייה הזו נמצאת בשכבה שהסתובבה
-        glm::vec3 p = glm::vec3(cubie.currentGridPos);
-        
-        // אם הקובייה נמצאת בכיוון הציר (למשל x=1 והציר הוא 1,0,0)
-        if (glm::dot(p, axis) > 0.1f) 
-        {
-            // 1. עדכון המיקום הלוגי (x,y,z)
-            // מכפילים במטריצה ומעגלים כדי לקבל מספרים שלמים (למשל 1, 0, -1)
-            glm::vec3 newPosf = glm::vec3(rot * glm::vec4(p, 1.0f));
-            cubie.currentGridPos = glm::ivec3(glm::round(newPosf));
+        bool shouldRotate = false;
+        int x = cubie.currentGridPos.x;
+        int y = cubie.currentGridPos.y;
+        int z = cubie.currentGridPos.z;
 
-            // 2. עדכון האוריינטציה (שמירת הסיבוב)
-            // אנחנו "אופים" את הסיבוב החדש לתוך הסיבוב המקומי של הקובייה
+        if (layerIndex == -1)
+        {
+            if      (axis.x > 0.5f && x == m_Size - 1) shouldRotate = true;
+            else if (axis.x < -0.5f && x == 0)           shouldRotate = true;
+            else if (axis.y > 0.5f && y == m_Size - 1) shouldRotate = true;
+            else if (axis.y < -0.5f && y == 0)           shouldRotate = true;
+            else if (axis.z > 0.5f && z == m_Size - 1) shouldRotate = true;
+            else if (axis.z < -0.5f && z == 0)           shouldRotate = true;
+        }
+        else
+        {
+            if      (std::abs(axis.x) > 0.9f && x == layerIndex) shouldRotate = true;
+            else if (std::abs(axis.y) > 0.9f && y == layerIndex) shouldRotate = true;
+            else if (std::abs(axis.z) > 0.9f && z == layerIndex) shouldRotate = true;
+        }
+
+        if (shouldRotate)
+        {
+            glm::vec4 p(x - center, y - center, z - center, 1.0f);
+            glm::vec4 pNew = rot * p;
+
+            cubie.currentGridPos.x = (int)std::round(pNew.x + center);
+            cubie.currentGridPos.y = (int)std::round(pNew.y + center);
+            cubie.currentGridPos.z = (int)std::round(pNew.z + center);
+
             cubie.localRotation = rot * cubie.localRotation;
         }
     }

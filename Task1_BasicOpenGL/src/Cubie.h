@@ -1,53 +1,50 @@
 #pragma once
-#include <array>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-enum class Face : int { PosX=0, NegX=1, PosY=2, NegY=3, PosZ=4, NegZ=5 };
-
-enum class StickerColor : int {
-    None = -1,
-    White, Yellow, Red, Orange, Blue, Green
+enum class StickerColor
+{
+    White, Yellow, Green, Blue, Red, Orange, None
 };
 
-inline glm::vec4 StickerToVec4(StickerColor c)
+enum class Face
 {
-    switch (c)
+    PosY = 0, // Top
+    NegY = 1, // Bottom
+    NegZ = 2, // Back
+    PosZ = 3, // Front
+    PosX = 4, // Right
+    NegX = 5  // Left
+};
+
+static glm::vec4 StickerToVec4(StickerColor color)
+{
+    switch (color)
     {
-        case StickerColor::White:  return {1,1,1,1};
-        case StickerColor::Yellow: return {1,1,0,1};
-        case StickerColor::Red:    return {1,0,0,1};
-        case StickerColor::Orange: return {1,0.5f,0,1};
-        case StickerColor::Blue:   return {0,0,1,1};
-        case StickerColor::Green:  return {0,1,0,1};
-        default:                   return {0,0,0,0};
+    case StickerColor::White:  return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    case StickerColor::Yellow: return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+    case StickerColor::Green:  return glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+    case StickerColor::Blue:   return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    case StickerColor::Red:    return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    case StickerColor::Orange: return glm::vec4(1.0f, 0.64f, 0.0f, 1.0f);
+    case StickerColor::None:   return glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
     }
+    return glm::vec4(0.0f);
 }
 
 struct Cubie
 {
-    int id = -1;
+    int id;
     glm::ivec3 currentGridPos;
-    // Stickers by face direction; internal faces are StickerColor::None.
-    std::array<StickerColor, 6> stickers = {
-        StickerColor::None, StickerColor::None,
-        StickerColor::None, StickerColor::None,
-        StickerColor::None, StickerColor::None
-    };
+    glm::mat4 localRotation;
+    StickerColor stickers[6];
 
-    // Cubie's own local orientation (stickers rotate with this).
-    glm::mat4 localRotation = glm::mat4(1.0f);
+    Cubie() : id(0), currentGridPos(0), localRotation(1.0f) {}
 
-    // Build model matrix from: slot world pos + local orientation + optional animation rotation + scale.
-    glm::mat4 BuildModel(const glm::vec3& slotWorldPos,
-                         const glm::mat4& wallAnimRotation,
-                         float uniformScale) const;
+    glm::mat4 BuildModel(const glm::vec3& slotWorldPos, const glm::mat4& wallAnimRotation, float uniformScale) const;
 
-    // After a wall turn is finalized, update cubie's local orientation (and optionally stickers).
     void ApplyLocalRotation(const glm::mat4& rot);
-
-    // Optional helper: rotate sticker assignment when the cubie turns 90° about axis.
-    // (If you keep "stickers drawn by face direction", you'll want this.)
     void RotateStickersAboutX(bool clockwise);
     void RotateStickersAboutY(bool clockwise);
     void RotateStickersAboutZ(bool clockwise);

@@ -12,7 +12,7 @@ uniform mat4 u_MVP;
 
 void main()
 {
-	gl_Position = u_MVP *  vec4(position.x, position.y, position.z, 1.0);
+	gl_Position = u_MVP * vec4(position.x, position.y, position.z, 1.0);
 	v_Color = vec4(color.x, color.y, color.z, 1.0);
 	v_TexCoord = texCoord;
 }
@@ -27,10 +27,20 @@ in vec2 v_TexCoord;
 
 uniform vec4 u_Color;
 uniform sampler2D u_Texture;
+uniform int u_PickingMode; // 0 = Normal, 1 = Picking
 
 void main()
 {
-	vec4 texColor = texture(u_Texture, v_TexCoord) * u_Color;
-	// gl_FragColor = texColor * v_Color;  // Deprecated
-	FragColor = texColor * v_Color;
+    if (u_PickingMode == 1)
+    {
+        // In picking mode, ignore texture and vertex color.
+        // Output the unique color (ID) passed via u_Color.
+        FragColor = u_Color; 
+    }
+    else
+    {
+        // Normal Rendering
+        vec4 texColor = texture(u_Texture, v_TexCoord) * u_Color;
+        FragColor = texColor * v_Color;
+    }
 }

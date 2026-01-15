@@ -1,115 +1,51 @@
 #include "Camera.h"
 
-// Correct GLFW callback signatures: key uses (window, key, scancode, action, mods),
-// mouse button uses (window, button, action, mods),
-// cursor pos uses (window, xpos, ypos),
-// scroll uses (window, xoffset, yoffset). [web:16][web:27]
-static void KeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods)
+Camera::Camera(int width, int height, glm::vec3 startPos)
+    : m_Width(width), m_Height(height), m_Position(startPos)
 {
-    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-    if (!camera) return;
-
-    if (action == GLFW_PRESS || action == GLFW_REPEAT)
-    {
-        switch (key)
-        {
-            case GLFW_KEY_UP:    std::cout << "UP Pressed\n"; break;
-            case GLFW_KEY_DOWN:  std::cout << "DOWN Pressed\n"; break;
-            case GLFW_KEY_LEFT:  std::cout << "LEFT Pressed\n"; break;
-            case GLFW_KEY_RIGHT: std::cout << "RIGHT Pressed\n"; break;
-            default: break;
-        }
-    }
-}
-
-static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-{
-    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-    if (!camera) return;
-
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-        std::cout << "MOUSE LEFT Click\n";
-    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-        std::cout << "MOUSE RIGHT Click\n";
-}
-
-static void CursorPosCallback(GLFWwindow* window, double currMouseX, double currMouseY)
-{
-    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-    if (!camera) return;
-
-    // חישוב הדלתא (כמה העכבר זז מהפריים הקודם)
-    double deltaX = currMouseX - camera->m_OldMouseX;
-    double deltaY = camera->m_OldMouseY - currMouseY; // הפוך ב-Y כי בצגים למעלה זה 0
-
-    camera->m_OldMouseX = currMouseX;
-    camera->m_OldMouseY = currMouseY;
-
-    // בדיקה: האם כפתור ימני לחוץ? רק אז נזיז את המצלמה
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-    {
-        float sensitivity = 0.3f; // רגישות העכבר
-        camera->m_Yaw   += deltaX * sensitivity;
-        camera->m_Pitch += deltaY * sensitivity;
-
-        // הגבלה כדי שהמצלמה לא תתהפך (Gimbal Lock)
-        if (camera->m_Pitch > 89.0f) camera->m_Pitch = 89.0f;
-        if (camera->m_Pitch < -89.0f) camera->m_Pitch = -89.0f;
-
-        // עדכון המיקום
-        camera->RecalculatePosition();
-    }
-}
-
-static void ScrollCallback(GLFWwindow* window, double scrollOffsetX, double scrollOffsetY)
-{
-    Camera* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-    if (!camera) return;
-
-    std::cout << "SCROLL Motion\n";
-}
-
-void Camera::UpdateView()
-{
-    m_View = glm::lookAt(m_Position, m_Position + m_Orientation, m_Up);
+    m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
+    m_Fov = 45.0f;
+    m_Near = 0.1f;
+    m_Far = 100.0f;
+    UpdateCameraVectors();
 }
 
 void Camera::SetPerspective(float fovDegrees, float nearPlane, float farPlane)
 {
+    m_Fov = fovDegrees;
     m_Near = nearPlane;
-    m_Far  = farPlane;
+    m_Far = farPlane;
+}
 
+glm::mat4 Camera::GetViewMatrix() const
+{
+    return glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+}
+
+glm::mat4 Camera::GetProjectionMatrix() const
+{
     float aspect = (float)m_Width / (float)m_Height;
-    m_Projection = glm::perspective(glm::radians(fovDegrees), aspect, m_Near, m_Far);
-    UpdateView();
+    return glm::perspective(glm::radians(m_Fov), aspect, m_Near, m_Far);
 }
 
-void Camera::EnableInputs(GLFWwindow* window)
+void Camera::Pan(float xOffset, float yOffset)
 {
-    glfwSetWindowUserPointer(window, this);
-
-    // Register callbacks without any casts (signatures already match). [web:16][web:27]
-    glfwSetKeyCallback(window, KeyCallback);
-    glfwSetMouseButtonCallback(window, MouseButtonCallback);
-    glfwSetCursorPosCallback(window, CursorPosCallback);
-    glfwSetScrollCallback(window, ScrollCallback);
+    float speed = 0.05f;
+    m_Position -= m_Right * xOffset * speed;
+    m_Position -= m_Up * yOffset * speed;
 }
 
-void Camera::LookAt(const glm::vec3& target)
+void Camera::Zoom(float yOffset)
 {
-    m_Orientation = glm::normalize(target - m_Position);
-    UpdateView();
+    float speed = 1.0f;
+    m_Position += m_Front * yOffset * speed;
 }
 
-void Camera::RecalculatePosition()
+void Camera::UpdateCameraVectors()
 {
-    // המרת קואורדינטות כדוריות (זוויות) לקואורדינטות קרטזיות (XYZ)
-    float x = m_Radius * cos(glm::radians(m_Pitch)) * cos(glm::radians(m_Yaw));
-    float y = m_Radius * sin(glm::radians(m_Pitch));
-    float z = m_Radius * cos(glm::radians(m_Pitch)) * sin(glm::radians(m_Yaw));
-
-    m_Position = glm::vec3(x, y, z);
-    
-    // חשוב: תמיד להסתכל למרכז (0,0,0)
-    LookAt(glm::vec3(0.0f, 0.0f, 0.0f));
+    // Fixed camera orientation looking at -Z
+    m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
+    m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
+    m_Up    = glm::normalize(glm::cross(m_Right, m_Front));
 }
