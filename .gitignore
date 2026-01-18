@@ -52,3 +52,6 @@ Task2_PointNet/lidar-od-scripts/
 # Ignore checkpoints or model weights if they are generated later
 Task2_PointNet/*.pth
 Task2_PointNet/*.pkl
+
+# Ignore virtual environment folder
+Task2_PointNet/venv/
