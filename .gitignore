@@ -39,3 +39,16 @@
 
 # debug information files
 *.dwo
+
+
+# --- Assignment 3 Task 2 Ignored Files ---
+
+# Ignore the heavy ShapeNet dataset folder
+Task2_PointNet/shapenet-core-seg/
+
+# Ignore the utility scripts folder (optional, if you didn't write them yourself)
+Task2_PointNet/lidar-od-scripts/
+
+# Ignore checkpoints or model weights if they are generated later
+Task2_PointNet/*.pth
+Task2_PointNet/*.pkl
