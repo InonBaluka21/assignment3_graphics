@@ -4,7 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 // Distance between cubies
-static const float SPACING = 2.1f; 
+static const float SPACING = 2.f; // from -1 to 1
 
 RubiksCube::RubiksCube(int size)
     : m_Size(size), m_Mesh(nullptr), m_Shader(nullptr), m_Texture(nullptr)
@@ -13,7 +13,7 @@ RubiksCube::RubiksCube(int size)
 
     m_Mesh = new CubeMesh();
     m_Shader = new Shader("res/shaders/basic.shader");
-    m_Texture = new Texture("res/textures/white.png");
+    m_Texture = new Texture("res/textures/plane.png");
 
     Init();
 }
