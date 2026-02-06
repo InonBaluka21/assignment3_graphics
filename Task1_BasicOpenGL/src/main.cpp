@@ -30,8 +30,6 @@ struct AppState {
     RubiksCube* cube = nullptr;
     glm::mat4 globalCubeRotation = glm::mat4(1.0f);
 
-    // Bonus: Selection Logic (Center of Rotation)
-    // Default center for size 3 is index 1. For size 5 it is index 2.
     int selectedLayerX = 1;
     int selectedLayerY = 1;
     int selectedLayerZ = 1;
@@ -64,7 +62,6 @@ glm::vec3 GetWorldPos(double mouseX, double mouseY, float depth, Camera* cam)
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    // OpenGL Y is inverted (0 at bottom), Mouse Y is 0 at top
     glm::vec3 winCoord = glm::vec3(mouseX, viewport[3] - mouseY, depth);
     
     glm::mat4 view = cam->GetViewMatrix();
@@ -93,7 +90,6 @@ int main()
         return -1;
     }
 
-    // --- SCOPE START: Objects must be destroyed before glfwTerminate ---
     {
         glEnable(GL_DEPTH_TEST);
 
@@ -174,14 +170,12 @@ int main()
             glfwPollEvents();
         }
 
-    } // --- SCOPE END: Destructors run here while OpenGL context is still valid ---
+    } 
 
     glfwTerminate();
     return 0;
 }
 
-// Callbacks implementation...
-// (Make sure to include the callback function implementations below or in a separate file as before)
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);

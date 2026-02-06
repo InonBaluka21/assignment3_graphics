@@ -111,10 +111,7 @@ void RubiksCube::Draw(const glm::mat4& viewProj, const glm::mat4& globalModel,
                 animRot = glm::rotate(glm::mat4(1.0f), glm::radians(animDeg), animAxis);
             }
         }
-
-        // --- Corrected: No Scaling, just draw the model ---
-        // If you want to highlight, you could change the u_Color slightly, 
-        // but the requirement is Translation/Rotation, so we leave scale at 1.0f.
+        
         glm::mat4 model = globalModel * cubie.BuildModel(currentPos, animRot, 1.0f);
         glm::mat4 mvp = viewProj * model;
 
